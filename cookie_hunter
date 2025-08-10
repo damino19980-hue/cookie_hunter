@@ -1,45 +1,63 @@
 #!/usr/bin/env python3
 import os
 import json
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from cryptography.fernet import Fernet
+from webdriver_manager.chrome import ChromeDriverManager
 
 class CookieHunter:
-def init(self, target_url):
-self.target_url = target_url
-self.key = Fernet.generate_key()
-self.cipher = Fernet(self.key)
-self.driver = self._init_driver()
+    def __init__(self, target_url):
+        self.target_url = target_url
+        self.key = Fernet.generate_key()
+        self.cipher = Fernet(self.key)
+        self.driver = self._init_driver()
 
-def _init_driver(self):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.binary_location = "/usr/bin/chromium"
-    return webdriver.Chrome(options=options)
+    def _init_driver(self):
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        return webdriver.Chrome(ChromeDriverManager().install(), options=options)
 
-def get_cookies(self):
-    try:
-        self.driver.get(self.target_url)
-        cookies = self.driver.get_cookies()
-        return {
-            "status": "success",
-            "url": self.target_url,
-            "cookies": [
-                {
-                    "name": c["name"],
-                    "value": self.cipher.encrypt(c["value"].encode()).decode(),
-                    "domain": c["domain"]
-                } for c in cookies
-            ],
-            "decryption_key": self.key.decode()
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-    finally:
-        self.driver.quit()
+    def get_cookies(self):
+        try:
+            self.driver.set_page_load_timeout(30)
+            self.driver.get(self.target_url)
+            time.sleep(2)  # انتظار 2 ثانية
+            cookies = self.driver.get_cookies()
+            return {
+                "status": "success",
+                "url": self.target_url,
+                "cookies": [
+                    {
+                        "name": c["name"],
+                        "value": self.cipher.encrypt(c["value"].encode()).decode(),
+                        "domain": c["domain"]
+                    } for c in cookies
+                ],
+                "decryption_key": self.key.decode()
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+        finally:
+            self.driver.quit()
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python3 cookie_hunter.py <target_url>")
+        sys.exit(1)
+    hunter = CookieHunter(sys.argv[1])
+    result = hunter.get_cookies()
+    print(json.dumps(result, indent=2))
